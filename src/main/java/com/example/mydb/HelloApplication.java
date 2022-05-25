@@ -43,13 +43,15 @@ public class HelloApplication extends Application {
 
     @Override
     public void start(Stage primaryStage) throws IOException {
-        primaryStage.setTitle("Compiere database Management");
-        primaryStage.setMaxHeight(500);
-        primaryStage.setMaxWidth(1000);
+        primaryStage.setTitle("Database Manager");
+        primaryStage.setHeight(500);
+        primaryStage.setWidth(800);
 
 
         //Scene 1 : Connecting and testing Connection
         BorderPane bp = new BorderPane();
+        bp.maxHeightProperty().bind(primaryStage.heightProperty());
+        bp.maxWidthProperty().bind(primaryStage.widthProperty());
         bp.setPadding(new Insets(10,50,50,50));
         HBox hb = new HBox();
         hb.setPadding(new Insets(20,20,20,30));
@@ -59,17 +61,26 @@ public class HelloApplication extends Application {
         gridPane.setVgap(5);
         Label lblHostName = new Label("Hostname");
         final TextField txtHostName = new TextField();
+        txtHostName.setPrefWidth(150);
         Label lblSID = new Label("SID");
         final TextField txtSID = new TextField();
+        txtSID.setPrefWidth(150);
         Label lblPort = new Label("Port");
         final TextField txtPort = new TextField();
+        txtPort.setPrefWidth(150);
         Label lblUserName = new Label("Username");
         final TextField txtUserName = new TextField();
+        txtUserName.setPrefWidth(150);
         Label lblPassword = new Label("Password");
         final PasswordField pf = new PasswordField();
+        pf.setPrefWidth(150);
         Button btnTest = new Button("Test connexion");
+        btnTest.setPadding(new Insets(5,5,5,5));
+        btnTest.setPrefWidth(150);
         final Label lblMessage = new Label();
         Button btnConnect = new Button("Connect");
+        btnConnect.setPadding(new Insets(5,5,5,5));
+        btnConnect.setPrefWidth(150);
         gridPane.add(lblHostName, 0, 0);
         gridPane.add(txtHostName, 1, 0);
         gridPane.add(lblUserName, 0, 1);
@@ -122,26 +133,88 @@ public class HelloApplication extends Application {
 
 
 
-        //Scene 2 : executing sql querry
-        BorderPane bp2 = new BorderPane();
-        bp2.setPadding(new Insets(10,50,50,50));
-        GridPane gridPane2 = new GridPane();
-        gridPane2.setPadding(new Insets(20,20,20,20));
-        gridPane2.setHgap(5);
-        gridPane2.setVgap(5);
-        final TextArea txtsql = new TextArea();
-        Label lblsql = new Label("SQL query :");
-        Button btnsend = new Button("Send");
+
+
+        tableview = new TableView();
+        tableview.prefHeightProperty().bind(primaryStage.heightProperty());
+        tableview.prefWidthProperty().bind(primaryStage.widthProperty());
+        data = FXCollections.observableArrayList();
+
+        //Scene 3 : SQl Data in table view
+        VBox VB = new VBox();
+        VB.setPadding(new Insets(20,20,20,20));
+        Button btnSvFile = new Button("Save to File");
+        btnSvFile.setPadding(new Insets(10,10,10,10));
+        Button btnSvFtp = new Button("Save to Server");
+        btnSvFtp.setPadding(new Insets(10,10,10,10));
+        Button btnBack = new Button("Clear");
+        btnBack.setPadding(new Insets(10,10,10,10));
+        HBox HB = new HBox(10);
+        HB.setPadding(new Insets(20,20,20,20));
+        HBox HB2 = new HBox(10);
+        HB2.setPadding(new Insets(20,20,20,20));
+        Label entersql = new Label("Enter SQL query");
+        TextField sqlfield = new TextField();
+        sqlfield.setPrefWidth(300);
+        sqlfield.setPadding(new Insets(10,10,10,10));
         Button InsertFile = new Button("Insert from file");
-        HBox hBox = new HBox();
-        hBox.getChildren().addAll(btnsend,InsertFile);
-        gridPane2.add(lblsql, 0, 0);
-        gridPane2.add(txtsql, 1, 0);
-        gridPane2.add(hBox, 1, 1);
-        Reflection r2 = new Reflection();
-        bp2.setId("bp2");
-        gridPane2.setId("root2");
-        bp2.setCenter(gridPane2);
+        InsertFile.setPadding(new Insets(10,10,10,10));
+        Button exec = new Button("Execute");
+        exec.setPadding(new Insets(10,10,10,10));
+        HB2.getChildren().addAll(entersql,sqlfield,exec,InsertFile);
+        HB.getChildren().addAll(btnSvFtp,btnSvFile,btnBack);
+        VB.getChildren().addAll(HB2,tableview,HB);
+        Scene scene3 = new Scene(VB);
+        exec.setOnAction(new EventHandler<ActionEvent>() {
+            public void handle(ActionEvent event) {
+                checkQuery = sqlfield.getText();
+                if(checkQuery.isEmpty()){
+                    showAlertWithHeaderText("No sql query detected","Please enter an sql query");
+                }else{
+                    try {
+                        DBConnect DB = new DBConnect(checkHostname,checkUser,checkPort,checkSID,checkPw);
+                        Connection con = DB.Connect();
+                        Statement stmt = con.createStatement();
+                        ResultSet rs = stmt.executeQuery(checkQuery);
+                        for(int i=0 ; i<rs.getMetaData().getColumnCount(); i++){
+                            //We are using non property style for making dynamic table
+                            final int j = i;
+                            TableColumn<ObservableList, String> col = new TableColumn(rs.getMetaData().getColumnName(i+1));
+                            col.setCellValueFactory(new Callback<TableColumn.CellDataFeatures<ObservableList,String>,ObservableValue<String>>(){
+                                public ObservableValue<String> call(TableColumn.CellDataFeatures<ObservableList, String> param) {
+                                    if (param.getValue().get(j) == null){
+                                        return new SimpleStringProperty("null");
+                                    }else {
+                                        return new SimpleStringProperty(param.getValue().get(j).toString());
+                                    }
+                                }
+                            });
+
+                            tableview.getColumns().addAll(col);
+                            System.out.println("Column ["+i+"] ");
+                        }
+                        while(rs.next()){
+                            ObservableList<String> row = FXCollections.observableArrayList();
+                            for(int i=1 ; i<=rs.getMetaData().getColumnCount(); i++){
+                                if (i > 1) result = result + ",  ";
+                                String columnValue = rs.getString(i);
+                                result = result + columnValue;
+                                row.add(rs.getString(i));
+                            }
+                            result = result + System.lineSeparator();
+                            System.out.println("Row [1] added "+row );
+                            data.add(row);
+                        }
+                        System.out.println(result);
+                        tableview.setItems(data);
+                        primaryStage.setScene(scene3);
+                    } catch (Exception e) {
+                        showAlertWithHeaderText("Error",e.getMessage());
+                        System.out.println(e);
+                    }
+                }
+            }
+        });
         InsertFile.setOnAction(new EventHandler<ActionEvent>() {
             @Override
             public void handle(ActionEvent actionEvent) {
@@ -197,103 +270,6 @@ public class HelloApplication extends Application {
                     } catch (SQLException e) {
                         showAlertWithHeaderText("SQL Exception",e.getMessage());
                         throw new RuntimeException(e);
-                    }
-                }
-            }
-        });
-        Scene scene2 = new Scene(bp2);
-        btnConnect.setOnAction(new EventHandler<ActionEvent>() {
-             public void handle(ActionEvent event) {
-                 checkPort = txtPort.getText().toString();
-                 checkSID = txtSID.getText().toString();
-                 checkUser = txtUserName.getText().toString();
-                 checkPw = pf.getText().toString();
-                 checkHostname = txtHostName.getText().toString();
-                 try {
-                     DBConnect DB = new DBConnect(checkHostname,checkUser,checkPort,checkSID,checkPw);
-                     Connection con = DB.Connect();
-                     Statement stmt = con.createStatement();
-                     ResultSet rs = stmt.executeQuery("select * from ad_user");
-                     if(rs.next()){
-                         lblMessage.setText("Connected to Database");
-                         lblMessage.setTextFill(Color.GREEN);
-                         primaryStage.setScene(scene2);
-                     }
-                 } catch (Exception e) {
-                     showAlertWithHeaderText("Error",e.getMessage());
-                     //lblMessage.setText(e.getMessage());
-                     //lblMessage.setTextFill(Color.RED);
-                     System.out.println(e);
-                 }
-
-             }
-         });
-        tableview = new TableView();
-        tableview.prefHeightProperty().bind(primaryStage.heightProperty());
-        tableview.prefWidthProperty().bind(primaryStage.widthProperty());
-        data = FXCollections.observableArrayList();
-
-        //Scene 3 : SQl Data in table view
-        VBox VB = new VBox();
-        VB.setPadding(new Insets(20,20,20,20));
-        Button btnSvFile = new Button("Save to File");
-        btnSvFile.setPadding(new Insets(10,10,10,10));
-        Button btnSvFtp = new Button("Save to Server");
-        btnSvFtp.setPadding(new Insets(10,10,10,10));
-        Button btnBack = new Button("Execute Sql");
-        btnBack.setPadding(new Insets(10,10,10,10));
-        HBox HB = new HBox();
-        HB.setPadding(new Insets(20,20,20,20));
-
-        HB.getChildren().addAll(btnSvFtp,btnSvFile,btnBack);
-        VB.getChildren().addAll(tableview,HB);
-        Scene scene3 = new Scene(VB);
-        btnsend.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent event) {
-                checkQuery = txtsql.getText();
-                if(checkQuery.isEmpty()){
-                    showAlertWithHeaderText("No sql query detected","Please enter an sql query");
-                }else{
-                    try {
-                        DBConnect DB = new DBConnect(checkHostname,checkUser,checkPort,checkSID,checkPw);
-                        Connection con = DB.Connect();
-                        Statement stmt = con.createStatement();
-                        ResultSet rs = stmt.executeQuery(checkQuery);
-                        for(int i=0 ; i<rs.getMetaData().getColumnCount(); i++){
-                            //We are using non property style for making dynamic table
-                            final int j = i;
-                            TableColumn<ObservableList, String> col = new TableColumn(rs.getMetaData().getColumnName(i+1));
-                            col.setCellValueFactory(new Callback<TableColumn.CellDataFeatures<ObservableList,String>,ObservableValue<String>>(){
-                                public ObservableValue<String> call(TableColumn.CellDataFeatures<ObservableList, String> param) {
-                                    if (param.getValue().get(j) == null){
-                                        return new SimpleStringProperty("null");
-                                    }else {
-                                        return new SimpleStringProperty(param.getValue().get(j).toString());
-                                    }
-                                }
-                            });
-
-                            tableview.getColumns().addAll(col);
-                            System.out.println("Column ["+i+"] ");
-                        }
-                        while(rs.next()){
-                            ObservableList<String> row = FXCollections.observableArrayList();
-                            for(int i=1 ; i<=rs.getMetaData().getColumnCount(); i++){
-                                if (i > 1) result = result + ",  ";
-                                String columnValue = rs.getString(i);
-                                result = result + columnValue;
-                                row.add(rs.getString(i));
-                            }
-                            result = result + System.lineSeparator();
-                            System.out.println("Row [1] added "+row );
-                            data.add(row);
-                        }
-                        System.out.println(result);
-                        tableview.setItems(data);
-                        primaryStage.setScene(scene3);
-                    } catch (Exception e) {
-                        showAlertWithHeaderText("Error",e.getMessage());
-                        System.out.println(e);
                     }
                 }
             }
@@ -432,7 +408,32 @@ public class HelloApplication extends Application {
                 result = "";
                 tableview.getColumns().clear();
                 data.clear();
-                primaryStage.setScene(scene2);
+            }
+        });
+        btnConnect.setOnAction(new EventHandler<ActionEvent>() {
+            public void handle(ActionEvent event) {
+                checkPort = txtPort.getText().toString();
+                checkSID = txtSID.getText().toString();
+                checkUser = txtUserName.getText().toString();
+                checkPw = pf.getText().toString();
+                checkHostname = txtHostName.getText().toString();
+                try {
+                    DBConnect DB = new DBConnect(checkHostname,checkUser,checkPort,checkSID,checkPw);
+                    Connection con = DB.Connect();
+                    Statement stmt = con.createStatement();
+                    ResultSet rs = stmt.executeQuery("select * from ad_user");
+                    if(rs.next()){
+                        lblMessage.setText("Connected to Database");
+                        lblMessage.setTextFill(Color.GREEN);
+                        primaryStage.setScene(scene3);
+                    }
+                } catch (Exception e) {
+                    showAlertWithHeaderText("Error",e.getMessage());
+                    //lblMessage.setText(e.getMessage());
+                    //lblMessage.setTextFill(Color.RED);
+                    System.out.println(e);
+                }
+
             }
         });
 
